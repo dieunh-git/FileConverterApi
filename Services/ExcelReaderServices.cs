@@ -25,6 +25,11 @@ namespace FileConverterApi.Services
             var tableName = Path.GetFileNameWithoutExtension(fileName);
             return dt;
         }
+        /// <summary>
+        /// Test
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public DataTable ReadFromPath(string path)
         {
             using var stream = File.OpenRead(path);
