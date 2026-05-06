@@ -1,26 +1,23 @@
-﻿using CommunityToolkit.HighPerformance;
-using FileConverterApi.Interfaces;
+﻿using FileConverterApi.Interfaces;
 using FileConverterApi.Models;
 using FileConverterApi.Services;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Data;
-using System.Diagnostics;
 
 namespace FileConverterApi
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/convertfile")]
     public class ConvertController : ControllerBase
     {
-        private readonly CsvReaderServices _csv;
-        private readonly ExcelReaderServices _excel;
+        private readonly CsvReaderService _csv;
+        private readonly ExcelReaderService _excel;
         private readonly ParquetWriterService _parquet;
         private readonly MinioService _minio;
         private readonly IcebergService _iceberg;
         private readonly IConfiguration _config;
         public ConvertController(
-            CsvReaderServices csv, ExcelReaderServices excel,
+            CsvReaderService csv, ExcelReaderService excel,
             ParquetWriterService parquet, MinioService minio,
             IcebergService iceberg, IConfiguration config)
         {
@@ -36,7 +33,7 @@ namespace FileConverterApi
             {
                 return BadRequest("Chưa chọn file");
             }
-            var ext = Path.GetExtension(file.Name);
+            var ext = Path.GetExtension(file.Name).ToLower();
             if (ext is not ".csv" and not ".xlsx" and not ".xls")
             {
                 return BadRequest("Không hỗ trợ định dạng khác ngoài file csv, xlsx, xls");
@@ -87,7 +84,57 @@ namespace FileConverterApi
                 });
             }
         }
-        public async Task<ConvertResult> ProcessAsync(DataTable table, string originalFileName)
+        [HttpPost(("watch"))]
+        public async Task<IActionResult> ConvertWatch()
+        {
+            var folder = _config["LocalWatch:Path"];
+            if(!Directory.Exists(folder))
+            {
+                return NotFound("Thư mục không tồn tại");
+            }
+            var files = Directory.GetFiles(folder,"*.*")
+                .Where(f  => new[] {".csv",".xlsx",".xls"}
+                    .Contains(Path.GetExtension(f).ToLower()))
+                .ToList();
+                ;
+            if (!files.Any())
+            {
+                return Ok(new
+                {
+                    message = "Không có file nào trong thư mục",
+                    results = new List<ConvertResult>()
+                });
+            }
+            var results = new List<ConvertResult>();
+            foreach (var filePath in files)
+            {
+                try
+                {
+                    var ext = Path.GetExtension(filePath).ToLower();
+                    var table = ext == ".csv"
+                        ? _csv.ReadFromPath(filePath)
+                        : _excel.ReadFromPath(filePath);
+                    var result = await ProcessAsync(table, Path.GetFileName(filePath));
+                    results.Add(result);
+                }
+                catch (Exception ex) {
+                    results.Add(new ConvertResult
+                    {
+                        Success = false,
+                        FileName = Path.GetFileName(filePath),
+                        Message = ex.Message
+                    });
+                }
+            }
+            return Ok(new 
+            {
+                total = results.Count,
+                success = results.Count(r => r.Success),
+                failed = results.Count(r => !r.Success),
+                results
+            });
+        }
+        private async Task<ConvertResult> ProcessAsync(DataTable table, string originalFileName)
         {
             var tableName = Path.GetFileNameWithoutExtension(originalFileName)
                         .ToLower().Replace(" ", "_");

@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace FileConverterApi.Services
 {
-    public class CsvReaderServices 
+    public class CsvReaderService 
     {
         public DataTable Read(Stream stream, string fileName)
         {

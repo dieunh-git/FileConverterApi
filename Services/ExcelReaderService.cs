@@ -4,9 +4,9 @@ using System.Text;
 
 namespace FileConverterApi.Services
 {
-    public class ExcelReaderServices
+    public class ExcelReaderService
     {
-        public ExcelReaderServices()
+        public ExcelReaderService()
         {
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         }
